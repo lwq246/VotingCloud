@@ -1,0 +1,19 @@
+runtime: nodejs18
+env: standard
+
+env_variables:
+  FIREBASE_API_KEY: "AIzaSyAv9bJNPFrAwMDBlib3f3cMvksxptK9nck"
+  FIREBASE_PROJECT_ID: "votingcloud-cb476"
+
+handlers:
+  # Serve static files
+  - url: /(.*\.(json|ico|js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))
+    static_files: dist/\1
+    upload: dist/.*\.(json|ico|js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)
+    secure: always
+
+  # Serve index.html for all routes
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+    secure: always
