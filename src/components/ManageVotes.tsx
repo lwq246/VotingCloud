@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_URL } from "../config/firebase";
-
+ 
 interface Vote {
   id: string;
   userId: string;
