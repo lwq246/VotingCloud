@@ -2,7 +2,7 @@ import { signOut } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
-
+ 
 const Home = () => {
   const [searchId, setSearchId] = useState("");
   const [userSessions, setUserSessions] = useState<any[]>([]);
