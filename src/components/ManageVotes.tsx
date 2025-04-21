@@ -5,7 +5,7 @@ import { API_URL } from "../config/firebase";
 interface Vote {
   id: string;
   userId: string;
-  userName: string;  // Add this field
+  userName: string; // Add this field
   option: string;
   timestamp: any;
 }
@@ -21,11 +21,14 @@ const ManageVotes = () => {
     const fetchVotes = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/api/sessions/${sessionId}/votes`, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+        const response = await fetch(
+          `${API_URL}/api/sessions/${sessionId}/votes`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
         if (!response.ok) {
           throw new Error("Failed to fetch votes");
         }
@@ -90,9 +93,7 @@ const ManageVotes = () => {
       <nav className="bg-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-indigo-600">VotingCloud</h1>
-            </div>
+            <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate(`/edit-session/${sessionId}`)}

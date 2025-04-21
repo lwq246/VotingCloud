@@ -143,7 +143,19 @@ const VotingSession = () => {
         return;
       }
 
-      // Submit vote using the Cloud Function endpoint
+      // Optimistically update the UI
+      const previousVote = userVote;
+      setUserVote(selectedOption);
+
+      // Update vote counts optimistically
+      const newVoteCounts = { ...voteCounts };
+      if (previousVote) {
+        newVoteCounts[previousVote] = (newVoteCounts[previousVote] || 1) - 1;
+      }
+      newVoteCounts[selectedOption] = (newVoteCounts[selectedOption] || 0) + 1;
+      setVoteCounts(newVoteCounts);
+
+      // Submit vote to server
       const voteResponse = await fetch(
         `https://asia-southeast1-votingcloud-cb476.cloudfunctions.net/submitVote/${sessionId}`,
         {
@@ -159,24 +171,12 @@ const VotingSession = () => {
       );
 
       if (!voteResponse.ok) {
+        // Revert optimistic updates if server request fails
+        setUserVote(previousVote);
+        setVoteCounts(voteCounts);
         const errorData = await voteResponse.json();
         throw new Error(errorData.error || "Failed to submit vote");
       }
-
-      // Update local state
-      setUserVote(selectedOption);
-
-      // Add delay to allow Cloud Function to process the vote
-      setTimeout(async () => {
-        // Refresh vote counts
-        const resultsResponse = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/results`
-        );
-        if (resultsResponse.ok) {
-          const { voteCounts } = await resultsResponse.json();
-          setVoteCounts(voteCounts);
-        }
-      }, 1000);
     } catch (err: any) {
       setError(err.message);
     }
@@ -230,7 +230,7 @@ const VotingSession = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-indigo-600">VotingCloud</h1>
+              <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-4">
               <button
