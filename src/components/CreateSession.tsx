@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
+;
+ 
 const CreateSession = () => {
   const navigate = useNavigate();
   const [sessionData, setSessionData] = useState({

@@ -10,7 +10,7 @@ import Login from "./components/Login";
 import ManageVotes from "./components/ManageVotes"; // Add this import
 import Register from "./components/Register";
 import VotingSession from "./components/VotingSession";
-
+ 
 function App() {
   useEffect(() => {
     emailjs.init("7524vGpbai0gUct-F");

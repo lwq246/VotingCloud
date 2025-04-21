@@ -3,7 +3,7 @@ import { signInWithCustomToken } from "firebase/auth";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase.tsx";
-
+ 
 const Register = () => {
   const form = useRef<HTMLFormElement>(null);
   const [name, setName] = useState("");
