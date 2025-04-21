@@ -1,7 +1,7 @@
 
-import { onDocumentWritten } https://github.com/lwq246/VotingCloud/tree/main/functions/srcfrom 'firebase-functions/v2/firestore';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { firestore } from './admin';
- 
+
 export const processVote = onDocumentWritten({
   document: 'votes/{voteId}',
   region: 'asia-southeast1'

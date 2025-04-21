@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
- 
+
 interface VotingSessionData {
   title: string;
   description: string;
