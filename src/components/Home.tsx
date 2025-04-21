@@ -2,11 +2,41 @@ import { signOut } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
- 
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 const Home = () => {
+  const navigate = useNavigate();
+
+  // Add this useEffect at the top of the component
+  useEffect(() => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const authTrace = trace(perf, "home_auth_check");
+    authTrace.start();
+
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        authTrace.putAttribute("status", "unauthorized");
+        authTrace.stop();
+        navigate("/");
+        return;
+      }
+
+      // Record successful authentication
+      authTrace.putAttribute("status", "authorized");
+      authTrace.stop();
+    };
+
+    checkAuth();
+  }, [navigate]);
+
   const [searchId, setSearchId] = useState("");
   const [userSessions, setUserSessions] = useState<any[]>([]);
-  const navigate = useNavigate();
 
   // This is the only useEffect we need - it uses the Node.js backend
   useEffect(() => {
@@ -14,14 +44,22 @@ const Home = () => {
       try {
         if (!auth.currentUser?.email) return;
 
-        // Get user data from localStorage
+        // Get user data and token
         const userData = JSON.parse(localStorage.getItem("userData") || "{}");
         const userId = userData.userId;
+        const token = await auth.currentUser?.getIdToken();
 
-        if (!userId) return;
+        if (!userId || !token) {
+          throw new Error("Authentication required");
+        }
 
-        // Fetch sessions from Node.js backend
-        const response = await fetch(`${API_URL}/api/sessions/${userId}`);
+        // Fetch sessions from Node.js backend with auth token
+        const response = await fetch(`${API_URL}/api/sessions/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
         if (!response.ok) {
           throw new Error("Failed to fetch sessions");
         }
@@ -40,6 +78,7 @@ const Home = () => {
     try {
       await signOut(auth);
       localStorage.removeItem("userData"); // Clear user data
+      localStorage.removeItem("token"); // Also clear the token
       navigate("/");
     } catch (error) {
       console.error("Logout error:", error);

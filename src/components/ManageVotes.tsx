@@ -1,12 +1,17 @@
+import CryptoJS from "crypto-js";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { API_URL } from "../config/firebase";
- 
+import config from "../config/env";
+import { API_URL, auth } from "../config/firebase";
+
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 interface Vote {
   id: string;
   userId: string;
   userName: string; // Add this field
-  option: string;
+  optionId: string;
   timestamp: any;
 }
 
@@ -18,14 +23,56 @@ const ManageVotes = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const authTrace = trace(perf, "manage_votes_auth_check");
+    authTrace.start();
+
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        authTrace.putAttribute("status", "unauthorized");
+        authTrace.stop();
+        navigate("/");
+        return;
+      }
+
+      // Record successful authentication
+      authTrace.putAttribute("status", "authorized");
+      authTrace.stop();
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  useEffect(() => {
+    const perf = getPerformance();
+    const fetchTrace = trace(perf, "fetch_votes");
+    fetchTrace.start();
+
+    const decryptUserId = (encryptedUserId: string) => {
+      const encryptionKey = config.ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        throw new Error("Encryption key is not configured");
+      }
+      const bytes = CryptoJS.AES.decrypt(encryptedUserId, encryptionKey);
+      return bytes.toString(CryptoJS.enc.Utf8);
+    };
+
     const fetchVotes = async () => {
       try {
         setLoading(true);
+        const token = await auth.currentUser?.getIdToken();
+
         const response = await fetch(
           `${API_URL}/api/sessions/${sessionId}/votes`,
           {
             headers: {
               "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
           }
         );
@@ -33,8 +80,19 @@ const ManageVotes = () => {
           throw new Error("Failed to fetch votes");
         }
         const data = await response.json();
-        setVotes(data);
+
+        const decryptedVotes = data.map((vote: any) => ({
+          ...vote,
+          userId: decryptUserId(vote.userId),
+        }));
+
+        fetchTrace.putMetric("vote_count", decryptedVotes.length);
+        fetchTrace.stop();
+
+        setVotes(decryptedVotes);
       } catch (err: any) {
+        fetchTrace.putAttribute("error", err.message);
+        fetchTrace.stop();
         setError(err.message);
       } finally {
         setLoading(false);
@@ -45,21 +103,43 @@ const ManageVotes = () => {
   }, [sessionId]);
 
   const handleDeleteVote = async (voteId: string) => {
+    const perf = getPerformance();
+    const deleteTrace = trace(perf, "delete_vote");
+    deleteTrace.start();
+
     try {
+      const voteToDelete = votes.find(vote => vote.id === voteId);
+      if (!voteToDelete) {
+        throw new Error("Vote not found in current list");
+      }
+
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+
       const response = await fetch(`${API_URL}/api/votes/${voteId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete vote");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete vote");
       }
 
-      // Remove the deleted vote from the state
+      deleteTrace.putAttribute("status", "success");
+      deleteTrace.stop();
+
       setVotes(votes.filter((vote) => vote.id !== voteId));
     } catch (err: any) {
+      deleteTrace.putAttribute("status", "error");
+      deleteTrace.putAttribute("error_message", err.message);
+      deleteTrace.stop();
+      console.error("Error deleting vote:", err);
       setError(err.message);
     }
   };
@@ -140,7 +220,7 @@ const ManageVotes = () => {
                         {vote.userName || vote.userId}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vote.option}
+                        {vote.optionId}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(vote.timestamp).toLocaleString()}
