@@ -86,7 +86,7 @@ const ManageVotes = () => {
   const handleDeleteVote = async (voteId: string) => {
     try {
       // Validate voteId exists in current votes
-      const voteToDelete = votes.find(vote => vote.id === voteId);
+      const voteToDelete = votes.find((vote) => vote.id === voteId);
       if (!voteToDelete) {
         throw new Error("Vote not found in current list");
       }
@@ -146,6 +146,7 @@ const ManageVotes = () => {
       <nav className="bg-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
+            <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             <div className="flex items-center space-x-4">
               <button

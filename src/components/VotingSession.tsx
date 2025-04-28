@@ -204,6 +204,9 @@ const VotingSession = () => {
         // Revert optimistic updates if server request fails
         setUserVote(previousVote);
         setVoteCounts(voteCounts);
+        // Revert optimistic updates if server request fails
+        setUserVote(previousVote);
+        setVoteCounts(voteCounts);
         const errorData = await voteResponse.json();
         throw new Error(errorData.error || "Failed to submit vote");
       }
@@ -260,6 +263,7 @@ const VotingSession = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
+              <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
               <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-4">
