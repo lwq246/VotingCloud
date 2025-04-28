@@ -1,10 +1,11 @@
 import cors from 'cors';
+import CryptoJS from 'crypto-js';
 import express from 'express';
 import admin from 'firebase-admin';
 import { createRequire } from 'module';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-
+import config from "./env.js";
 const require = createRequire(import.meta.url);
 const serviceAccount = require('./service_account_key.json');
 const __filename = fileURLToPath(import.meta.url);
@@ -19,8 +20,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Add this new route with your existing routes
+// Add this middleware after the initial setup and before the routes
+const verifyToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+
 // Get voting sessions for a user
-app.get('/api/sessions/:userId', async (req, res) => {
+app.get('/api/sessions/:userId', verifyToken, async (req, res) => {
   try {
     const db = admin.firestore();
     const sessionsRef = db.collection('votingSessions');
@@ -40,7 +60,7 @@ app.get('/api/sessions/:userId', async (req, res) => {
 });
 
 // Create audit log
-app.post('/api/audit-logs', async (req, res) => {
+app.post('/api/audit-logs', verifyToken, async (req, res) => {
   try {
     const { sessionId, userId, action, details, timestamp } = req.body;
     const db = admin.firestore();
@@ -62,7 +82,7 @@ app.post('/api/audit-logs', async (req, res) => {
 });
 
 // Get session details
-app.get('/api/sessions/:sessionId/details', async (req, res) => {
+app.get('/api/sessions/:sessionId/details', verifyToken, async (req, res) => {
   try {
     const db = admin.firestore();
     const sessionDoc = await db.collection('votingSessions').doc(req.params.sessionId).get();
@@ -86,7 +106,7 @@ app.get('/api/sessions/:sessionId/details', async (req, res) => {
 });
 
 // Get audit logs for a session
-app.get('/api/audit-logs/:sessionId', async (req, res) => {
+app.get('/api/audit-logs/:sessionId', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const logsRef = db.collection('auditLogs');
@@ -128,26 +148,8 @@ app.get('/api/audit-logs/:sessionId', async (req, res) => {
   }
 });
 
-// Add this new route with your existing routes
-// Add this middleware after the initial setup and before the routes
-const verifyToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
-
 // Update the login endpoint
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login',  async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -252,7 +254,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 // Create voting session
-app.post('/api/sessions', async (req, res) => {
+app.post('/api/sessions', verifyToken,async (req, res) => {
   try {
     const { title, description, options, createdBy, startTime, endTime, status = 'pending' } = req.body;
     const db = admin.firestore();
@@ -284,7 +286,7 @@ app.post('/api/sessions', async (req, res) => {
 });
 
 // Update voting session
-app.put('/api/sessions/:sessionId', async (req, res) => {
+app.put('/api/sessions/:sessionId', verifyToken,async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { title, description, status } = req.body;
@@ -304,7 +306,7 @@ app.put('/api/sessions/:sessionId', async (req, res) => {
 });
 
 // Get session details
-app.get('/api/sessions/:sessionId/details', async (req, res) => {
+app.get('/api/sessions/:sessionId/details', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const sessionDoc = await db.collection('votingSessions').doc(req.params.sessionId).get();
@@ -335,7 +337,7 @@ app.get('/api/sessions/:sessionId/details', async (req, res) => {
 });
 
 // Get session results
-app.get('/api/sessions/:sessionId/results', async (req, res) => {
+app.get('/api/sessions/:sessionId/results', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const sessionDoc = await db.collection('votingSessions').doc(req.params.sessionId).get();
@@ -365,22 +367,45 @@ app.get('/api/sessions/:sessionId/results', async (req, res) => {
 });
 
 // Get user's vote for a session
-app.get('/api/sessions/:sessionId/user-vote/:userId', async (req, res) => {
+app.get('/api/sessions/:sessionId/user-vote/:userId', verifyToken, async (req, res) => {
   try {
     const { sessionId, userId } = req.params;
     const db = admin.firestore();
     
+    // Get all votes for the session
     const voteQuery = await db.collection('votes')
       .where('sessionId', '==', sessionId)
-      .where('userId', '==', userId)
       .get();
 
     if (voteQuery.empty) {
-      return res.status(404).json({ error: 'No vote found' });
+      return res.status(404).json({ error: 'No votes found for this session' });
     }
 
-    const vote = voteQuery.docs[0].data();
-    res.json({ optionId: vote.optionId });
+    // Decrypt and compare each vote's userId
+    let userVote = null;
+    for (const doc of voteQuery.docs) {
+      const vote = doc.data();
+      try {
+        // Decrypt the stored userId
+        const bytes = CryptoJS.AES.decrypt(vote.userId, config.ENCRYPTION_KEY);
+        const decryptedUserId = bytes.toString(CryptoJS.enc.Utf8);
+        
+        // Compare with the provided userId
+        if (decryptedUserId === userId) {
+          userVote = { optionId: vote.optionId };
+          break;
+        }
+      } catch (decryptError) {
+        console.error('Error decrypting userId:', decryptError);
+        continue;
+      }
+    }
+
+    if (!userVote) {
+      return res.status(404).json({ error: 'No vote found for this user' });
+    }
+
+    res.json(userVote);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -432,7 +457,7 @@ async function logVotingActivity(sessionId, userId, action, details, severity = 
 }
 
 // Add a new endpoint to get classified logs
-app.get('/api/cloud-logs/classified', async (req, res) => {
+app.get('/api/cloud-logs/classified', verifyToken,async (req, res) => {
   try {
     const { severity, category } = req.query;
     let filter = 'resource.type="global"';
@@ -468,7 +493,7 @@ app.get('/api/cloud-logs/classified', async (req, res) => {
 });
 
 // Update your vote endpoint
-app.post('/api/sessions/:sessionId/vote', async (req, res) => {
+app.post('/api/sessions/:sessionId/vote',verifyToken, async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { userId, option } = req.body;
@@ -509,7 +534,7 @@ app.post('/api/sessions/:sessionId/vote', async (req, res) => {
 });
 
 // Get session for editing
-app.get('/api/sessions/:sessionId/edit', async (req, res) => {
+app.get('/api/sessions/:sessionId/edit', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const sessionDoc = await db.collection('votingSessions').doc(req.params.sessionId).get();
@@ -531,7 +556,7 @@ app.get('/api/sessions/:sessionId/edit', async (req, res) => {
 });
 
 // Add vote option
-app.post('/api/sessions/:sessionId/options', async (req, res) => {
+app.post('/api/sessions/:sessionId/options', verifyToken,async (req, res) => {
     try {
       const { sessionId } = req.params;
       const { optionText } = req.body;
@@ -566,7 +591,7 @@ app.post('/api/sessions/:sessionId/options', async (req, res) => {
   });
 
 // Delete vote option
-app.delete('/api/sessions/:sessionId/options/:optionId', async (req, res) => {
+app.delete('/api/sessions/:sessionId/options/:optionId', verifyToken,async (req, res) => {
   try {
     const { sessionId, optionId } = req.params;
     const db = admin.firestore();
@@ -610,7 +635,7 @@ app.delete('/api/sessions/:sessionId/options/:optionId', async (req, res) => {
 });
 
 // Update session
-app.put('/api/sessions/:sessionId', async (req, res) => {
+app.put('/api/sessions/:sessionId', verifyToken,async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { title, description, startTime, endTime, status } = req.body;
@@ -632,7 +657,7 @@ app.put('/api/sessions/:sessionId', async (req, res) => {
 });
 
 // Add a test endpoint after your existing routes
-app.post('/api/test/vote', async (req, res) => {
+app.post('/api/test/vote', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const testData = {
@@ -675,7 +700,7 @@ app.post('/api/test/vote', async (req, res) => {
 });
 
 // Get all audit logs
-app.get('/api/audit-logs', async (req, res) => {
+app.get('/api/audit-logs', verifyToken,async (req, res) => {
   try {
     const db = admin.firestore();
     const logsRef = db.collection('auditLogs');
@@ -719,7 +744,7 @@ app.get('/api/audit-logs', async (req, res) => {
 });
 
 // Add this endpoint to retrieve Cloud Logging entries
-app.get('/api/cloud-logs', async (req, res) => {
+app.get('/api/cloud-logs', verifyToken,async (req, res) => {
   try {
     const [entries] = await log.getEntries({
       pageSize: 50,
@@ -743,7 +768,7 @@ app.get('/api/cloud-logs', async (req, res) => {
 });
 
 // Get all votes for a session
-app.get('/api/sessions/:sessionId/votes', async (req, res) => {
+app.get('/api/sessions/:sessionId/votes', verifyToken,async (req, res) => {
   try {
     const { sessionId } = req.params;
     const db = admin.firestore();
@@ -770,52 +795,57 @@ app.get('/api/sessions/:sessionId/votes', async (req, res) => {
 });
 
 // Delete a vote
-app.delete('/api/votes/:voteId', async (req, res) => {
+app.delete('/api/votes/:voteId', verifyToken, async (req, res) => {
   try {
     const { voteId } = req.params;
+    console.log(`Attempting to delete vote with ID: ${voteId}`); // Add logging
+    
+    if (!voteId || typeof voteId !== 'string') {
+      return res.status(400).json({ error: 'Invalid vote ID' });
+    }
+
     const db = admin.firestore();
     
-    // Get the vote first to update vote counts
-    const voteDoc = await db.collection('votes').doc(voteId).get();
+    // Get the vote document
+    const voteRef = db.collection('votes').doc(voteId);
+    const voteDoc = await voteRef.get();
     
     if (!voteDoc.exists) {
-      return res.status(404).json({ error: 'Vote not found' });
+      console.log(`Vote with ID ${voteId} not found in Firestore`); // Add logging
+      return res.status(404).json({ 
+        error: 'Vote not found',
+        details: `No vote found with ID: ${voteId}`
+      });
     }
-    
+
     const voteData = voteDoc.data();
-    const { sessionId, option } = voteData;
+    console.log('Found vote data:', voteData); // Add logging
     
     // Delete the vote
-    await db.collection('votes').doc(voteId).delete();
-    
-    // Update vote count in the session
-    const sessionDoc = await db.collection('votingSessions').doc(sessionId).get();
-    if (sessionDoc.exists) {
-      const sessionData = sessionDoc.data();
-      const voteCounts = { ...sessionData.voteCounts };
-      
-      if (voteCounts[option] && voteCounts[option] > 0) {
-        voteCounts[option]--;
-        await db.collection('votingSessions').doc(sessionId).update({ voteCounts });
-      }
-    }
-    
-    // Create audit log for vote deletion
+    await voteRef.delete();
+
+    // Create audit log with proper option value
     await db.collection('auditLogs').add({
-      sessionId,
+      sessionId: voteData.sessionId,
       userId: voteData.userId,
       action: 'delete_vote',
       details: {
-        deletedOption: option
+        deletedOption: voteData.option || voteData.optionId || 'Unknown Option' // Ensure we have a valid value
       },
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    
-    res.json({ message: 'Vote deleted successfully' });
+
+    res.json({ 
+      message: 'Vote deleted successfully',
+      deletedVoteId: voteId
+    });
   } catch (error) {
-    console.error('Error deleting vote:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error deleting vote:', error); // Add detailed error logging
+    res.status(500).json({ 
+      error: 'Failed to delete vote',
+      details: error.message 
+    });
   }
 });
 
@@ -825,7 +855,7 @@ app.listen(PORT, () => {
 });
 
 // Update vote option
-app.put('/api/sessions/:sessionId/options/:optionId', async (req, res) => {
+app.put('/api/sessions/:sessionId/options/:optionId', verifyToken,async (req, res) => {
   try {
     const { sessionId, optionId } = req.params;
     const { optionText } = req.body;

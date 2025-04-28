@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
- 
+
 const EditSession = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -14,6 +14,22 @@ const EditSession = () => {
     status: "",
   });
 
+  // Add this useEffect at the top of the component
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        navigate("/");
+        return;
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
   // Add new state for vote options
   const [voteOptions, setVoteOptions] = useState<
     Array<{ id: string; text: string }>
@@ -25,9 +41,15 @@ const EditSession = () => {
     const fetchSession = async () => {
       try {
         if (!sessionId || !auth.currentUser?.email) return;
+        const token = await auth.currentUser?.getIdToken();
 
         const response = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/edit`
+          `${API_URL}/api/sessions/${sessionId}/edit`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
         if (!response.ok) {
           throw new Error("Failed to fetch session");
@@ -69,6 +91,7 @@ const EditSession = () => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
           },
           body: JSON.stringify({ optionText: newOption.trim() }),
         }
@@ -96,6 +119,7 @@ const EditSession = () => {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
           },
         }
       );
@@ -119,6 +143,7 @@ const EditSession = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
         },
         body: JSON.stringify(sessionData),
       });

@@ -1,12 +1,14 @@
+import CryptoJS from "crypto-js";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { API_URL } from "../config/firebase";
- 
+import config from "../config/env";
+import { API_URL, auth } from "../config/firebase";
+
 interface Vote {
   id: string;
   userId: string;
   userName: string; // Add this field
-  option: string;
+  optionId: string;
   timestamp: any;
 }
 
@@ -18,14 +20,43 @@ const ManageVotes = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        navigate("/");
+        return;
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  useEffect(() => {
+    // In fetchVotes function
+    const decryptUserId = (encryptedUserId: string) => {
+      const encryptionKey = config.ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        throw new Error("Encryption key is not configured");
+      }
+      const bytes = CryptoJS.AES.decrypt(encryptedUserId, encryptionKey);
+      return bytes.toString(CryptoJS.enc.Utf8);
+    };
+
+    // Modify the fetchVotes function
     const fetchVotes = async () => {
       try {
         setLoading(true);
+        const token = await auth.currentUser?.getIdToken();
+
         const response = await fetch(
           `${API_URL}/api/sessions/${sessionId}/votes`,
           {
             headers: {
               "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
             },
           }
         );
@@ -33,7 +64,14 @@ const ManageVotes = () => {
           throw new Error("Failed to fetch votes");
         }
         const data = await response.json();
-        setVotes(data);
+
+        // Decrypt user IDs in the fetched votes
+        const decryptedVotes = data.map((vote: any) => ({
+          ...vote,
+          userId: decryptUserId(vote.userId),
+        }));
+
+        setVotes(decryptedVotes);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -44,22 +82,37 @@ const ManageVotes = () => {
     fetchVotes();
   }, [sessionId]);
 
+  // In handleDeleteVote function
   const handleDeleteVote = async (voteId: string) => {
     try {
+      // Validate voteId exists in current votes
+      const voteToDelete = votes.find(vote => vote.id === voteId);
+      if (!voteToDelete) {
+        throw new Error("Vote not found in current list");
+      }
+
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+
       const response = await fetch(`${API_URL}/api/votes/${voteId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete vote");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete vote");
       }
 
-      // Remove the deleted vote from the state
+      // Only remove the vote if the server deletion was successful
       setVotes(votes.filter((vote) => vote.id !== voteId));
     } catch (err: any) {
+      console.error("Error deleting vote:", err);
       setError(err.message);
     }
   };
@@ -140,7 +193,7 @@ const ManageVotes = () => {
                         {vote.userName || vote.userId}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {vote.option}
+                        {vote.optionId}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(vote.timestamp).toLocaleString()}

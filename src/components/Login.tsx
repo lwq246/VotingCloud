@@ -2,7 +2,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase.tsx";
- 
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,9 +20,10 @@ const Login = () => {
         email,
         password
       );
-
-      // Get the ID token
       const idToken = await userCredential.user.getIdToken();
+
+      // Store the token right after getting it
+      localStorage.setItem("token", idToken);
 
       // Then verify with backend
       const response = await fetch(`${API_URL}/api/auth/login`, {

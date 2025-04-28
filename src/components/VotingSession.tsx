@@ -1,5 +1,7 @@
+import CryptoJS from "crypto-js"; // Add this import
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import config from "../config/env";
 import { API_URL, auth } from "../config/firebase";
 
 interface VotingSessionData {
@@ -46,7 +48,12 @@ const VotingSession = () => {
 
         // Fetch session details
         const sessionResponse = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/details`
+          `${API_URL}/api/sessions/${sessionId}/details`,
+          {
+            headers: {
+              Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
+            },
+          }
         );
         if (!sessionResponse.ok) {
           throw new Error("Session not found");
@@ -67,7 +74,12 @@ const VotingSession = () => {
 
         // Fetch vote options and counts
         const resultsResponse = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/results`
+          `${API_URL}/api/sessions/${sessionId}/results`,
+          {
+            headers: {
+              Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
+            },
+          }
         );
         if (resultsResponse.ok) {
           const { voteCounts, options } = await resultsResponse.json();
@@ -83,7 +95,12 @@ const VotingSession = () => {
         // Check user's vote if logged in
         if (userId) {
           const voteResponse = await fetch(
-            `${API_URL}/api/sessions/${sessionId}/user-vote/${userId}`
+            `${API_URL}/api/sessions/${sessionId}/user-vote/${userId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
+              },
+            }
           );
           if (voteResponse.ok) {
             const { optionId } = await voteResponse.json();
@@ -100,6 +117,18 @@ const VotingSession = () => {
 
     fetchSessionAndOptions();
   }, [sessionId]);
+
+  const encryptUserId = (userId: string) => {
+    const encryptionKey = config.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      throw new Error("Encryption key is not configured");
+    }
+    return CryptoJS.AES.encrypt(userId, encryptionKey).toString();
+  };
+
+  const hashUserId = (userId: string) => {
+    return CryptoJS.SHA256(userId).toString(CryptoJS.enc.Hex);
+  };
 
   const handleVoteSubmit = async () => {
     try {
@@ -143,6 +172,22 @@ const VotingSession = () => {
         return;
       }
 
+      // Submit vote to server with all required parameters
+      const voteResponse = await fetch(
+        `https://asia-southeast1-votingcloud-cb476.cloudfunctions.net/submitVote/${sessionId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: encryptUserId(userId), // Encrypt the user ID
+            hashedUserId: hashUserId(userId), // Hash the user ID
+            optionId: selectedOption, // Use the correct field name
+          }),
+        }
+      );
+
       // Optimistically update the UI
       const previousVote = userVote;
       setUserVote(selectedOption);
@@ -154,21 +199,6 @@ const VotingSession = () => {
       }
       newVoteCounts[selectedOption] = (newVoteCounts[selectedOption] || 0) + 1;
       setVoteCounts(newVoteCounts);
-
-      // Submit vote to server
-      const voteResponse = await fetch(
-        `https://asia-southeast1-votingcloud-cb476.cloudfunctions.net/submitVote/${sessionId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId,
-            option: selectedVoteOption.optionText,
-          }),
-        }
-      );
 
       if (!voteResponse.ok) {
         // Revert optimistic updates if server request fails

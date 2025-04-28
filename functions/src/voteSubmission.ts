@@ -10,48 +10,46 @@ export const submitVote = onRequest({
 }, async (req, res) => {
   return corsHandler(req, res, async () => {
     try {
-      // Get sessionId from URL path segments
       const urlParts = req.path.split('/');
-      const sessionId = urlParts[urlParts.length - 1];  // Get the last segment
-      const { userId, option } = req.body;
+      const sessionId = urlParts[urlParts.length - 1];
+      const { userId: encryptedUserId, hashedUserId, optionId } = req.body;
 
-      if (!sessionId || !userId || !option) {
+      if (!sessionId || !encryptedUserId || !hashedUserId || !optionId) {
         throw new Error('Missing required parameters');
       }
 
-      // Get previous vote if exists
+      // Use hashedUserId for uniqueness check
       const voteQuery = await firestore.collection('votes')
         .where('sessionId', '==', sessionId)
-        .where('userId', '==', userId)
+        .where('hashedUserId', '==', hashedUserId)
         .get();
 
-      const previousVote = !voteQuery.empty ? voteQuery.docs[0].data().option : null;
+      // const previousVote = !voteQuery.empty ? voteQuery.docs[0].data().option : null;
 
-      // Record vote in database
       if (!voteQuery.empty) {
         await voteQuery.docs[0].ref.delete();
       }
 
       await firestore.collection('votes').add({
         sessionId,
-        userId,
-        optionId: option,
-        option,
+        userId: encryptedUserId,
+        hashedUserId, // Store hashed user ID
+        optionId,
         timestamp: FieldValue.serverTimestamp()
       });
 
-      // Create audit log
-      await firestore.collection('auditLogs').add({
-        sessionId,
-        userId,
-        action: previousVote ? 'change_vote' : 'new_vote',
-        details: {
-          previousOption: previousVote,
-          newOption: option
-        },
-        timestamp: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp()
-      });
+      // // Create audit log
+      // await firestore.collection('auditLogs').add({
+      //   sessionId,
+      //   userId,
+      //   action: previousVote ? 'change_vote' : 'new_vote',
+      //   details: {
+      //     previousOption: previousVote,
+      //     newOption: option
+      //   },
+      //   timestamp: FieldValue.serverTimestamp(),
+      //   createdAt: FieldValue.serverTimestamp()
+      // });
 
       res.json({ message: 'Vote recorded successfully' });
     } catch (error: any) {

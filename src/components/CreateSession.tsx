@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
 const CreateSession = () => {
@@ -11,6 +11,22 @@ const CreateSession = () => {
   });
   const [options, setOptions] = useState<string[]>(["", ""]);
   const [error, setError] = useState("");
+
+  // Add this useEffect at the top of the component
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        navigate("/");
+        return;
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
 
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...options];
@@ -51,10 +67,12 @@ const CreateSession = () => {
       const endTime = new Date(sessionData.endTime).toISOString();
 
       // Create session through Node.js backend
+      // Inside handleSubmit function
       const response = await fetch(`${API_URL}/api/sessions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`,
         },
         body: JSON.stringify({
           title: sessionData.title,
