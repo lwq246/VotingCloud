@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import config from "../config/env";
 import { API_URL, auth } from "../config/firebase";
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
 
 interface VotingSessionData {
   title: string;
@@ -38,6 +40,11 @@ const VotingSession = () => {
 
   useEffect(() => {
     const fetchSessionAndOptions = async () => {
+      // Initialize performance monitoring
+      const perf = getPerformance();
+      const fetchTrace = trace(perf, "fetch_session_data");
+      fetchTrace.start();
+
       setLoading(true);
       try {
         if (!sessionId) throw new Error("No session ID provided");
@@ -131,6 +138,11 @@ const VotingSession = () => {
   };
 
   const handleVoteSubmit = async () => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const voteTrace = trace(perf, "submit_vote");
+    voteTrace.start();
+
     try {
       // Add time check
       const now = new Date();
@@ -204,9 +216,6 @@ const VotingSession = () => {
         // Revert optimistic updates if server request fails
         setUserVote(previousVote);
         setVoteCounts(voteCounts);
-        // Revert optimistic updates if server request fails
-        setUserVote(previousVote);
-        setVoteCounts(voteCounts);
         const errorData = await voteResponse.json();
         throw new Error(errorData.error || "Failed to submit vote");
       }
@@ -263,7 +272,6 @@ const VotingSession = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
               <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-4">

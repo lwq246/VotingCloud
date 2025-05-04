@@ -2,21 +2,34 @@ import { signOut } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
- 
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 const Home = () => {
   const navigate = useNavigate();
 
   // Add this useEffect at the top of the component
   useEffect(() => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const authTrace = trace(perf, "home_auth_check");
+    authTrace.start();
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       const userData = localStorage.getItem("userData");
 
       if (!token || !userData || !auth.currentUser) {
         console.log("Unauthorized access attempt - redirecting to login");
+        authTrace.putAttribute("status", "unauthorized");
+        authTrace.stop();
         navigate("/");
         return;
       }
+
+      // Record successful authentication
+      authTrace.putAttribute("status", "authorized");
+      authTrace.stop();
     };
 
     checkAuth();

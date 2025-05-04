@@ -24,7 +24,7 @@ export const submitVote = onRequest({
         .where('hashedUserId', '==', hashedUserId)
         .get();
 
-      // const previousVote = !voteQuery.empty ? voteQuery.docs[0].data().option : null;
+      const previousVote = !voteQuery.empty ? voteQuery.docs[0].data().optionId : null;
 
       if (!voteQuery.empty) {
         await voteQuery.docs[0].ref.delete();
@@ -38,18 +38,18 @@ export const submitVote = onRequest({
         timestamp: FieldValue.serverTimestamp()
       });
 
-      // // Create audit log
-      // await firestore.collection('auditLogs').add({
-      //   sessionId,
-      //   userId,
-      //   action: previousVote ? 'change_vote' : 'new_vote',
-      //   details: {
-      //     previousOption: previousVote,
-      //     newOption: option
-      //   },
-      //   timestamp: FieldValue.serverTimestamp(),
-      //   createdAt: FieldValue.serverTimestamp()
-      // });
+      // Create audit log
+      await firestore.collection('auditLogs').add({
+        sessionId,
+        userId: encryptedUserId,
+        action: previousVote ? 'change_vote' : 'new_vote',
+        details: {
+          previousOption: previousVote || null,
+          newOption: optionId
+        },
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      });
 
       res.json({ message: 'Vote recorded successfully' });
     } catch (error: any) {

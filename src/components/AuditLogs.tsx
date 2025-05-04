@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { API_URL } from "../config/firebase";
- 
+import { API_URL, auth } from "../config/firebase";
+
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 interface AuditLog {
   id: string;
   sessionId: string;
@@ -24,36 +27,88 @@ const AuditLogsPage = () => {
   const [sessionTitle, setSessionTitle] = useState("");
 
   useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("userData");
+
+      if (!token || !userData || !auth.currentUser) {
+        console.log("Unauthorized access attempt - redirecting to login");
+        navigate("/");
+        return;
+      }
+      return token;
+    };
+
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const componentTrace = trace(perf, "audit_logs_load");
+    componentTrace.start();
+
     const fetchData = async () => {
       try {
+        const token = await checkAuth();
+        if (!token) return;
+
+        // Create trace for session details fetch
+        const sessionTrace = trace(perf, "fetch_session_details");
+        sessionTrace.start();
+
         // Fetch session details
         const sessionResponse = await fetch(
-          `${API_URL}/api/sessions/${sessionId}/details`
+          `${API_URL}/api/sessions/${sessionId}/details`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
         const sessionData = await sessionResponse.json();
         setSessionTitle(sessionData.title);
 
+        sessionTrace.stop();
+
+        // Create trace for audit logs fetch
+        const logsTrace = trace(perf, "fetch_audit_logs");
+        logsTrace.start();
+
         // Fetch audit logs
         const logsResponse = await fetch(
-          `${API_URL}/api/audit-logs/${sessionId}`
+          `${API_URL}/api/audit-logs/${sessionId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
         if (!logsResponse.ok) {
           throw new Error("Failed to fetch audit logs");
         }
-        const data = await logsResponse.json();
+        const logsData = await logsResponse.json();
 
-        // Access the logs array from the response
-        const logsData = data.logs || [];
-        setLogs(logsData);
+        logsTrace.stop();
+
+        // Validate and transform logs data
+        const validatedLogs = logsData.map((log: AuditLog) => ({
+          ...log,
+          userId: log.userId || "unknown",
+          userName: log.userName || "Unknown User",
+          details: {
+            previousOption: log.details?.previousOption || null,
+            newOption: log.details?.newOption || "",
+          },
+        }));
+
+        setLogs(validatedLogs);
       } catch (error) {
         console.error("Error fetching audit logs:", error);
       } finally {
         setLoading(false);
+        componentTrace.stop();
       }
     };
 
     fetchData();
-  }, [sessionId]);
+  }, [sessionId, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-100">
