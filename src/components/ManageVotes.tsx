@@ -4,6 +4,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import config from "../config/env";
 import { API_URL, auth } from "../config/firebase";
 
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 interface Vote {
   id: string;
   userId: string;
@@ -20,22 +23,36 @@ const ManageVotes = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const authTrace = trace(perf, "manage_votes_auth_check");
+    authTrace.start();
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       const userData = localStorage.getItem("userData");
 
       if (!token || !userData || !auth.currentUser) {
         console.log("Unauthorized access attempt - redirecting to login");
+        authTrace.putAttribute("status", "unauthorized");
+        authTrace.stop();
         navigate("/");
         return;
       }
+
+      // Record successful authentication
+      authTrace.putAttribute("status", "authorized");
+      authTrace.stop();
     };
 
     checkAuth();
   }, [navigate]);
 
   useEffect(() => {
-    // In fetchVotes function
+    const perf = getPerformance();
+    const fetchTrace = trace(perf, "fetch_votes");
+    fetchTrace.start();
+
     const decryptUserId = (encryptedUserId: string) => {
       const encryptionKey = config.ENCRYPTION_KEY;
       if (!encryptionKey) {
@@ -45,7 +62,6 @@ const ManageVotes = () => {
       return bytes.toString(CryptoJS.enc.Utf8);
     };
 
-    // Modify the fetchVotes function
     const fetchVotes = async () => {
       try {
         setLoading(true);
@@ -65,14 +81,18 @@ const ManageVotes = () => {
         }
         const data = await response.json();
 
-        // Decrypt user IDs in the fetched votes
         const decryptedVotes = data.map((vote: any) => ({
           ...vote,
           userId: decryptUserId(vote.userId),
         }));
 
+        fetchTrace.putMetric("vote_count", decryptedVotes.length);
+        fetchTrace.stop();
+
         setVotes(decryptedVotes);
       } catch (err: any) {
+        fetchTrace.putAttribute("error", err.message);
+        fetchTrace.stop();
         setError(err.message);
       } finally {
         setLoading(false);
@@ -82,11 +102,13 @@ const ManageVotes = () => {
     fetchVotes();
   }, [sessionId]);
 
-  // In handleDeleteVote function
   const handleDeleteVote = async (voteId: string) => {
+    const perf = getPerformance();
+    const deleteTrace = trace(perf, "delete_vote");
+    deleteTrace.start();
+
     try {
-      // Validate voteId exists in current votes
-      const voteToDelete = votes.find((vote) => vote.id === voteId);
+      const voteToDelete = votes.find(vote => vote.id === voteId);
       if (!voteToDelete) {
         throw new Error("Vote not found in current list");
       }
@@ -109,9 +131,14 @@ const ManageVotes = () => {
         throw new Error(errorData.error || "Failed to delete vote");
       }
 
-      // Only remove the vote if the server deletion was successful
+      deleteTrace.putAttribute("status", "success");
+      deleteTrace.stop();
+
       setVotes(votes.filter((vote) => vote.id !== voteId));
     } catch (err: any) {
+      deleteTrace.putAttribute("status", "error");
+      deleteTrace.putAttribute("error_message", err.message);
+      deleteTrace.stop();
       console.error("Error deleting vote:", err);
       setError(err.message);
     }
@@ -146,7 +173,6 @@ const ManageVotes = () => {
       <nav className="bg-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             <img src="/Logo.png" alt="VotingCloud" className="h-10 w-auto" />
             <div className="flex items-center space-x-4">
               <button

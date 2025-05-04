@@ -3,6 +3,8 @@ import { signInWithCustomToken } from "firebase/auth";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase.tsx";
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
  
 const Register = () => {
   const form = useRef<HTMLFormElement>(null);
@@ -68,13 +70,20 @@ const Register = () => {
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const otpTrace = trace(perf, "otp_verification");
+    otpTrace.start();
+
     if (otp !== sentOtp) {
+      otpTrace.putAttribute("status", "invalid_otp");
+      otpTrace.stop();
       setError("Invalid OTP");
       return;
     }
 
     try {
-      // First verify OTP with backend
+      // Verify OTP with backend
       const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
@@ -87,7 +96,11 @@ const Register = () => {
         throw new Error("OTP verification failed");
       }
 
-      // Register user in backend first
+      // Start registration trace
+      const registerTrace = trace(perf, "user_registration");
+      registerTrace.start();
+
+      // Register user in backend
       const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
@@ -106,8 +119,10 @@ const Register = () => {
       }
 
       const userData = await registerResponse.json();
+      registerTrace.putAttribute("status", "success");
+      registerTrace.stop();
 
-      // Fixed: Use signInWithCustomToken correctly
+      // Sign in with custom token
       await signInWithCustomToken(auth, userData.customToken);
 
       // Store user data
@@ -119,8 +134,14 @@ const Register = () => {
         })
       );
 
+      otpTrace.putAttribute("status", "success");
+      otpTrace.stop();
+
       navigate("/home");
     } catch (err: any) {
+      otpTrace.putAttribute("status", "error");
+      otpTrace.putAttribute("error_message", err.message);
+      otpTrace.stop();
       setError(err.message);
       console.error("Registration error:", err);
     }
