@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase";
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
 
 const EditSession = () => {
   const { sessionId } = useParams();
@@ -13,6 +15,24 @@ const EditSession = () => {
     endTime: "",
     status: "",
   });
+
+  // Add performance monitoring
+  useEffect(() => {
+    // Initialize Firebase Performance
+    const perf = getPerformance();
+
+    // Create a trace for this component
+    const componentTrace = trace(perf, "edit_session_load");
+    componentTrace.start();
+
+    return () => {
+      // Stop the trace when component unmounts
+      componentTrace.stop();
+
+      // Log component usage
+      console.log("Edit Session component performance tracked");
+    };
+  }, []);
 
   // Add this useEffect at the top of the component
   useEffect(() => {
@@ -36,9 +56,16 @@ const EditSession = () => {
   >([]);
   const [newOption, setNewOption] = useState("");
 
-  // Modify useEffect to fetch vote options
+  // Modify useEffect to fetch vote options with performance tracking
   useEffect(() => {
     const fetchSession = async () => {
+      // Initialize Firebase Performance
+      const perf = getPerformance();
+
+      // Create a trace for API call
+      const apiTrace = trace(perf, "fetch_session_data");
+      apiTrace.start();
+
       try {
         if (!sessionId || !auth.currentUser?.email) return;
         const token = await auth.currentUser?.getIdToken();
@@ -73,7 +100,19 @@ const EditSession = () => {
             }))
           );
         }
+
+        // Add custom metrics to the trace
+        apiTrace.putAttribute("session_id", sessionId);
+        apiTrace.putMetric("response_size", JSON.stringify(data).length);
+        apiTrace.putMetric("options_count", data.options?.length || 0);
+
+        // Stop the trace with success
+        apiTrace.stop();
       } catch (err: any) {
+        // Add error information to trace
+        apiTrace.putAttribute("error", err.message);
+        apiTrace.stop();
+
         setError(err.message);
       }
     };
@@ -81,8 +120,14 @@ const EditSession = () => {
     fetchSession();
   }, [sessionId]);
 
+  // Add performance tracking to handleAddOption
   const handleAddOption = async () => {
     if (!newOption.trim()) return;
+
+    // Initialize performance monitoring for this operation
+    const perf = getPerformance();
+    const addOptionTrace = trace(perf, "add_voting_option");
+    addOptionTrace.start();
 
     try {
       const response = await fetch(
@@ -105,7 +150,16 @@ const EditSession = () => {
       const data = await response.json();
       setVoteOptions([...voteOptions, { id: data.id, text: data.text }]);
       setNewOption("");
+
+      // Record success in trace
+      addOptionTrace.putAttribute("status", "success");
+      addOptionTrace.stop();
     } catch (err: any) {
+      // Record error in trace
+      addOptionTrace.putAttribute("status", "error");
+      addOptionTrace.putAttribute("error_message", err.message);
+      addOptionTrace.stop();
+
       setError(err.message);
       console.error("Error adding option:", err);
     }
