@@ -1,6 +1,6 @@
 # VotingCloud 🗳️
 
-!(screenshots/voting.png)
+![Voting](screenshots/voting.png)
 
 A secure, scalable, and serverless-ready voting application built to demonstrate modern cloud application development practices. This project utilizes the Google Cloud Platform ecosystem to ensure high availability, real-time data consistency, and robust security.
 
