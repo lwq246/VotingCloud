@@ -1,47 +1,56 @@
-# VotingCloud 🗳️
+# VotingCloud
 
-(screenshots/voting.png)
+# React + TypeScript + Vite
 
-A secure, scalable, and serverless-ready voting application built to demonstrate modern cloud application development practices. This project utilizes the Google Cloud Platform ecosystem to ensure high availability, real-time data consistency, and robust security.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 🚀 Key Features
+Currently, two official plugins are available:
 
-### Functional
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-- **User Management:** Secure Sign-up/Sign-in with **OTP verification** via EmailJS.
-- **Real-Time Voting:** Instant vote updates and result visualization using Firestore listeners.
-- **Session Management:** Users can create, edit, and search for voting sessions by ID.
-- **Role-Based Access Control (RBAC):** Only session creators can modify options or delete votes; standard users are restricted to voting.
+## Expanding the ESLint configuration
 
-### Security
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-- **Authentication:** Firebase Authentication combined with custom **JWT validation** on the backend.
-- **Data Protection:** Sensitive user IDs are encrypted using `bcrypt` (storage) and `AES/SHA256` (processing).
-- **Network Security:** Enforced HTTPS/SSL via Firebase Hosting and Cloud Run.
-- **Route Protection:** Frontend route guards to prevent unauthorized access.
+```js
+export default tseslint.config({
+  extends: [
+    // Remove ...tseslint.configs.recommended and replace with this
+    ...tseslint.configs.recommendedTypeChecked,
+    // Alternatively, use this for stricter rules
+    ...tseslint.configs.strictTypeChecked,
+    // Optionally, add this for stylistic rules
+    ...tseslint.configs.stylisticTypeChecked,
+  ],
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ["./tsconfig.node.json", "./tsconfig.app.json"],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+});
+```
 
-### DevOps & Cloud Infrastructure
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-- **Auto-Scaling:** Backend deployed on **Google Cloud Run** with a generic scaling configuration (Min: 0, Max: 40 instances) to handle traffic spikes and reduce costs when idle.
-- **Serverless Functions:** **Google Cloud Functions** handle background tasks like vote processing and submission logic.
-- **Observability:** Integrated **Firebase Performance Monitoring** and **Google Cloud Logging** for structured error tracking and audit logs.
-- **Alerting:** Automated alerts for high CPU usage (>80%) or error rate spikes.
+```js
+// eslint.config.js
+import reactX from "eslint-plugin-react-x";
+import reactDom from "eslint-plugin-react-dom";
 
-## 🛠️ Tech Stack
-
-| Component      | Technology        | Service/Platform                  |
-| :------------- | :---------------- | :-------------------------------- |
-| **Frontend**   | React.js          | Firebase Hosting                  |
-| **Backend**    | Node.js / Express | Google Cloud Run (Dockerized)     |
-| **Database**   | NoSQL             | Cloud Firestore                   |
-| **Functions**  | JavaScript        | Cloud Functions                   |
-| **Auth**       | JWT / OTP         | Firebase Auth & EmailJS           |
-| **Monitoring** | SDK Integration   | Google Cloud Monitoring & Logging |
-
-## 🏗️ Architecture & Deployment
-
-The system follows a decoupled architecture:
-
-1.  **Frontend:** Static assets served globally via Firebase Hosting.
-2.  **Backend:** Containerized Node.js application deployed to Cloud Run (`asia-southeast1`).
-3.  **Triggers:** Cloud Functions react to database changes to aggregate vote counts efficiently.
+export default tseslint.config({
+  plugins: {
+    // Add the react-x and react-dom plugins
+    "react-x": reactX,
+    "react-dom": reactDom,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended typescript rules
+    ...reactX.configs["recommended-typescript"].rules,
+    ...reactDom.configs.recommended.rules,
+  },
+});
+```

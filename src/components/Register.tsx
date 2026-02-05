@@ -3,9 +3,7 @@ import { signInWithCustomToken } from "firebase/auth";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase.tsx";
-// Add Firebase Performance import
-import { getPerformance, trace } from "firebase/performance";
- 
+
 const Register = () => {
   const form = useRef<HTMLFormElement>(null);
   const [name, setName] = useState("");
@@ -40,7 +38,7 @@ const Register = () => {
       if (form.current) {
         // Add OTP directly to form before sending
         const otpInput = form.current.querySelector(
-          'input[name="otp_code"]'
+          'input[name="otp_code"]',
         ) as HTMLInputElement;
         if (otpInput) {
           otpInput.value = generatedOtp;
@@ -50,7 +48,7 @@ const Register = () => {
           "service_pk78mw9",
           "template_o98pt6q",
           form.current,
-          "7524vGpbai0gUct-F"
+          "7524vGpbai0gUct-F",
         );
 
         setSentOtp(generatedOtp); // Move this here after successful send
@@ -60,7 +58,7 @@ const Register = () => {
     } catch (error) {
       console.error("Error sending OTP:", error);
       setError(
-        "Failed to send OTP. Please check your email address and try again."
+        "Failed to send OTP. Please check your email address and try again.",
       );
     } finally {
       setIsLoading(false);
@@ -83,7 +81,7 @@ const Register = () => {
     }
 
     try {
-      // Verify OTP with backend
+      // First verify OTP with backend
       const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
@@ -96,11 +94,7 @@ const Register = () => {
         throw new Error("OTP verification failed");
       }
 
-      // Start registration trace
-      const registerTrace = trace(perf, "user_registration");
-      registerTrace.start();
-
-      // Register user in backend
+      // Register user in backend first
       const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
@@ -131,7 +125,7 @@ const Register = () => {
         JSON.stringify({
           ...userData,
           customToken: userData.customToken,
-        })
+        }),
       );
 
       otpTrace.putAttribute("status", "success");

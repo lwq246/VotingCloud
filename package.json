@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@firebase/performance-types": "^0.2.3",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.13.17",
     "@types/react": "^19.0.10",
