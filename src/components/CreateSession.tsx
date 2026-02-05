@@ -17,6 +17,11 @@ const CreateSession = () => {
 
   // Add this useEffect at the top of the component
   useEffect(() => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const componentTrace = trace(perf, "create_session_load");
+    componentTrace.start();
+
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       const userData = localStorage.getItem("userData");
@@ -29,6 +34,11 @@ const CreateSession = () => {
     };
 
     checkAuth();
+
+    return () => {
+      // Stop the trace when component unmounts
+      componentTrace.stop();
+    };
   }, [navigate]);
 
   const handleOptionChange = (index: number, value: string) => {
@@ -49,12 +59,6 @@ const CreateSession = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Create trace for session creation
-    const perf = getPerformance();
-    const createSessionTrace = trace(perf, "create_session_submit");
-    createSessionTrace.start();
-
     try {
       const user = auth.currentUser;
       if (!user?.email) {
@@ -97,11 +101,6 @@ const CreateSession = () => {
       }
 
       const session = await response.json();
-
-      // Record success in trace
-      createSessionTrace.putAttribute("status", "success");
-      createSessionTrace.stop();
-
       navigate(`/session/${session.id}`);
     } catch (error: any) {
       // Record error in trace

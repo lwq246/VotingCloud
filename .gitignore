@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 "service_account_key.json" 
+
+votingCloud_Logging.json
+service_account_key.json

@@ -81,20 +81,11 @@ const Register = () => {
     }
 
     try {
-      // First verify OTP with backend
-      const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, otp }),
-      });
+      // Start registration trace
+      const registerTrace = trace(perf, "user_registration");
+      registerTrace.start();
 
-      if (!verifyResponse.ok) {
-        throw new Error("OTP verification failed");
-      }
-
-      // Register user in backend first
+      // Register user in backend
       const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
