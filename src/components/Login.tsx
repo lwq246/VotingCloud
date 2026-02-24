@@ -3,6 +3,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL, auth } from "../config/firebase.tsx";
 
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,6 +15,11 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const loginTrace = trace(perf, "login_process");
+    loginTrace.start();
 
     try {
       // First authenticate with Firebase
@@ -24,6 +32,10 @@ const Login = () => {
 
       // Store the token right after getting it
       localStorage.setItem("token", idToken);
+
+      // Create trace for backend login
+      const backendTrace = trace(perf, "backend_login");
+      backendTrace.start();
 
       // Then verify with backend
       const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -44,6 +56,7 @@ const Login = () => {
       }
 
       const userData = await response.json();
+      backendTrace.stop();
 
       // Store user data in localStorage
       localStorage.setItem(
@@ -54,6 +67,10 @@ const Login = () => {
         })
       );
 
+      // Record successful login
+      loginTrace.putAttribute("status", "success");
+      loginTrace.stop();
+
       // Redirect based on user role
       if (userData.role === "manager") {
         navigate("/manager");
@@ -61,6 +78,11 @@ const Login = () => {
         navigate("/home");
       }
     } catch (err: any) {
+      // Record failed login
+      loginTrace.putAttribute("status", "error");
+      loginTrace.putAttribute("error_message", err.message);
+      loginTrace.stop();
+
       setError(err.message);
       console.error("Login error:", err);
     }

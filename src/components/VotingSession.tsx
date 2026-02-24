@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import config from "../config/env";
 import { API_URL, auth } from "../config/firebase";
+// Add Firebase Performance import
+import { getPerformance, trace } from "firebase/performance";
 
 interface VotingSessionData {
   title: string;
@@ -38,6 +40,11 @@ const VotingSession = () => {
 
   useEffect(() => {
     const fetchSessionAndOptions = async () => {
+      // Initialize performance monitoring
+      const perf = getPerformance();
+      const fetchTrace = trace(perf, "fetch_session_data");
+      fetchTrace.start();
+
       setLoading(true);
       try {
         if (!sessionId) throw new Error("No session ID provided");
@@ -131,6 +138,11 @@ const VotingSession = () => {
   };
 
   const handleVoteSubmit = async () => {
+    // Initialize performance monitoring
+    const perf = getPerformance();
+    const voteTrace = trace(perf, "submit_vote");
+    voteTrace.start();
+
     try {
       // Add time check
       const now = new Date();
